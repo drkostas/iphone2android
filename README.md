@@ -17,7 +17,7 @@ Some things cannot be recovered from any backup, so move them while the iPhone s
 pip install iphone2android
 ```
 
-You also need `adb` (`brew install android-platform-tools` on macOS) with USB debugging on in the phone's developer options, and `sqlite3` for repairing a damaged message database.
+You also need `adb` (`brew install android-platform-tools` on macOS) with USB debugging on in the phone's developer options.
 
 ## 1. Make an encrypted backup
 
@@ -44,7 +44,7 @@ iphone2android convert --out android-import
 | `calendar.ics` | Google Calendar (Settings, Import & export) |
 | `safari_bookmarks.html` | Chrome on a computer (Bookmarks, Import), then sync |
 
-Apple sometimes saves the message database in the middle of a write, so the backup copy is damaged and SQLite refuses to open it. `convert` repairs it with `sqlite3 .recover` before converting.
+Apple sometimes saves the message database in the middle of a write, so the backup copy is shorter than its own header says and SQLite refuses to open it. `convert` corrects the header in a copy and reads what is there. If that is not enough and your `sqlite3` has the `.recover` command, it uses that instead.
 
 WhatsApp chats (`ChatStorage.sqlite`) need a dedicated iOS to Android WhatsApp migrator, and Apple Notes (`NoteStore.sqlite`) need an Apple Notes parser. `extract` copies both out for those tools.
 
