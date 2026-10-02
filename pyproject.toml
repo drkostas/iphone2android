@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "iphone2android"
+version = "0.1.0"
+description = "Move from an iPhone to an Android phone: messages, contacts, photos, apps and the home screen, from an encrypted iPhone backup"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [{ name = "Konstantinos Georgiou" }]
+dependencies = ["iOSbackup>=0.9.9", "pycryptodome>=3.18"]
+keywords = ["iphone", "ios", "android", "migration", "backup", "adb", "sms", "launcher"]
+classifiers = ["Programming Language :: Python :: 3", "Topic :: Utilities"]
+
+[project.urls]
+Homepage = "https://github.com/drkostas/iphone2android"
+
+[project.scripts]
+iphone2android = "iphone2android.cli:main"
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
