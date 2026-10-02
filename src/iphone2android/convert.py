@@ -60,8 +60,11 @@ def sms(src_dir: Path, out_dir: Path) -> int:
             _open(src).execute("PRAGMA integrity_check").fetchone()
         except sqlite3.DatabaseError:
             fixed = src_dir / "sms_recovered.db"
-            if recover_sms(src, fixed):
-                src = fixed
+            if not shutil.which("sqlite3"):
+                raise RuntimeError("sms.db is damaged and the sqlite3 command is needed to repair it (install sqlite3)")
+            if not recover_sms(src, fixed):
+                raise RuntimeError("sms.db is damaged and sqlite3 .recover could not repair it")
+            src = fixed
     rows = _open(src).execute(
         """SELECT m.text, m.date, m.is_from_me, h.id FROM message m
            LEFT JOIN handle h ON m.handle_id = h.ROWID

@@ -78,6 +78,17 @@ def test_a_missing_database_does_not_stop_the_rest(tmp_path):
     assert results["sms"][0] == 2
 
 
+def test_a_damaged_sms_db_without_sqlite3_says_so(tmp_path, monkeypatch):
+    src, out = tmp_path / "src", tmp_path / "out"
+    src.mkdir()
+    make_sources(src)
+    data = (src / "sms.db").read_bytes()
+    (src / "sms.db").write_bytes(data[:28] + b"\x00\x00\x00\x40" + data[32:])
+    monkeypatch.setattr(convert.shutil, "which", lambda _name: None)
+    results = {name: err for name, _, err in convert.convert_all(src, out)}
+    assert "install sqlite3" in results["sms"]
+
+
 def test_truncated_sms_db_is_recovered(tmp_path):
     src, out = tmp_path / "src", tmp_path / "out"
     src.mkdir()
