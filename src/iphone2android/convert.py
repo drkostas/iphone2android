@@ -35,6 +35,32 @@ def apple_ms(value) -> int:
     return (v + APPLE_EPOCH) * 1000
 
 
+def fix_page_count(src: Path, dst: Path) -> bool:
+    """Copy a database whose header claims more pages than the file holds, with the count corrected.
+
+    This is the usual damage in an iPhone backup: Apple snapshots sms.db in the middle of a write, the
+    file is shorter than its header says, and SQLite calls it malformed. The pages that are there are
+    readable once the header agrees with the file. Returns True when the copy opens cleanly.
+    """
+    data = bytearray(src.read_bytes())
+    if len(data) < 100 or not data.startswith(b"SQLite format 3\x00"):
+        return False
+    page_size = int.from_bytes(data[16:18], "big")
+    page_size = 65536 if page_size == 1 else page_size
+    if not page_size or len(data) % page_size:
+        return False
+    data[28:32] = (len(data) // page_size).to_bytes(4, "big")
+    data[92:96] = data[24:28]  # mark the corrected count as valid for the current change counter
+    dst.write_bytes(bytes(data))
+    try:
+        con = sqlite3.connect(dst)
+        ok = con.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        con.close()
+        return ok
+    except sqlite3.DatabaseError:
+        return False
+
+
 def recover_sms(src: Path, dst: Path) -> bool:
     """Rebuild a truncated sms.db with sqlite3's .recover.
 
@@ -60,10 +86,8 @@ def sms(src_dir: Path, out_dir: Path) -> int:
             _open(src).execute("PRAGMA integrity_check").fetchone()
         except sqlite3.DatabaseError:
             fixed = src_dir / "sms_recovered.db"
-            if not shutil.which("sqlite3"):
-                raise RuntimeError("sms.db is damaged and the sqlite3 command is needed to repair it (install sqlite3)")
-            if not recover_sms(src, fixed):
-                raise RuntimeError("sms.db is damaged and sqlite3 .recover could not repair it")
+            if not (fix_page_count(src, fixed) or recover_sms(src, fixed)):
+                raise RuntimeError("sms.db is damaged and could not be repaired (a sqlite3 with the .recover command may manage it)")
             src = fixed
     rows = _open(src).execute(
         """SELECT m.text, m.date, m.is_from_me, h.id FROM message m

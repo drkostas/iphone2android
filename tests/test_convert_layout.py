@@ -78,26 +78,30 @@ def test_a_missing_database_does_not_stop_the_rest(tmp_path):
     assert results["sms"][0] == 2
 
 
-def test_a_damaged_sms_db_without_sqlite3_says_so(tmp_path, monkeypatch):
-    src, out = tmp_path / "src", tmp_path / "out"
-    src.mkdir()
-    make_sources(src)
-    data = (src / "sms.db").read_bytes()
-    (src / "sms.db").write_bytes(data[:28] + b"\x00\x00\x00\x40" + data[32:])
-    monkeypatch.setattr(convert.shutil, "which", lambda _name: None)
-    results = {name: err for name, _, err in convert.convert_all(src, out)}
-    assert "install sqlite3" in results["sms"]
-
-
-def test_truncated_sms_db_is_recovered(tmp_path):
-    src, out = tmp_path / "src", tmp_path / "out"
-    src.mkdir()
-    make_sources(src)
+def damage(src):
     data = (src / "sms.db").read_bytes()
     (src / "sms.db").write_bytes(data[:28] + b"\x00\x00\x00\x40" + data[32:])  # header claims 64 pages
+
+
+def test_a_truncated_sms_db_is_repaired_without_any_tool(tmp_path, monkeypatch):
+    src, out = tmp_path / "src", tmp_path / "out"
+    src.mkdir()
+    make_sources(src)
+    damage(src)
+    monkeypatch.setattr(convert.shutil, "which", lambda _name: None)  # no sqlite3 command
     results = {name: n for name, n, _ in convert.convert_all(src, out)}
     assert results["sms"] == 2
-    assert (src / "sms_recovered.db").exists()  # the recovery really ran
+    assert (src / "sms_recovered.db").exists()
+
+
+def test_an_unrepairable_sms_db_says_so(tmp_path, monkeypatch):
+    src, out = tmp_path / "src", tmp_path / "out"
+    src.mkdir()
+    make_sources(src)
+    (src / "sms.db").write_bytes(b"SQLite format 3\x00" + b"\x01" * 200)
+    monkeypatch.setattr(convert.shutil, "which", lambda _name: None)
+    results = {name: err for name, _, err in convert.convert_all(src, out)}
+    assert "could not be repaired" in results["sms"]
 
 
 ICONSTATE = {
@@ -128,3 +132,24 @@ def test_iconstate_and_mapping(tmp_path):
     assert android["pages"] == [["Camera", {"folder": "Social", "apps": ["WhatsApp"]}]]  # empty page dropped
     assert missing == ["com.apple.MobileSMS", "com.unknown.app", "ph.telegra.Telegraph"]
     assert layout.packages_in(mapping) == ["com.android.chrome", "com.google.android.dialer", "com.whatsapp"]
+
+
+def _has_recover():
+    import shutil
+    import subprocess
+
+    if not shutil.which("sqlite3"):
+        return False
+    r = subprocess.run(["sqlite3", ":memory:", ".recover"], capture_output=True, text=True)
+    return "unknown command" not in (r.stderr + r.stdout).lower() and r.returncode == 0
+
+
+def test_recover_rebuilds_a_database_when_sqlite3_supports_it(tmp_path):
+    import pytest
+
+    if not _has_recover():
+        pytest.skip("this sqlite3 has no .recover")
+    make_sources(tmp_path)
+    assert convert.recover_sms(tmp_path / "sms.db", tmp_path / "rebuilt.db")
+    n = sqlite3.connect(tmp_path / "rebuilt.db").execute("SELECT count(*) FROM message").fetchone()[0]
+    assert n == 4
