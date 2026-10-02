@@ -30,6 +30,7 @@ KNOWN = [
     ("AppDomainGroup-group.com.apple.notes", "NoteStore.sqlite", "NoteStore.sqlite", "Apple Notes", "read with an Apple Notes parser"),
     ("AppDomainGroup-group.net.whatsapp.WhatsApp.shared", "ChatStorage.sqlite", "ChatStorage.sqlite", "WhatsApp chats", "a WhatsApp iOS-to-Android migrator"),
     ("HomeDomain", "Library/SpringBoard/IconState.plist", "IconState.plist", "Home screen layout", "iphone2android layout"),
+    ("HomeDomain", "Library/Accounts/Accounts3.sqlite", "Accounts3.sqlite", "Signed-in accounts", "iphone2android accounts"),
 ]
 
 # Files that have lived in more than one place across iOS versions: (domain, other path, name).

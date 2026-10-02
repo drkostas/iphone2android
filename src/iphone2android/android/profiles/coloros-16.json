@@ -1,0 +1,197 @@
+{
+  "name": "coloros-16",
+  "description": "OPPO / OnePlus launcher (com.android.launcher) on ColorOS 16, Android 16. Measured on an OPPO Find X9 Pro (CPH2791), 1272x2772, density 476, 4 columns. Numbers in 'evidence' are records of the original migration session.",
+  "match": {
+    "launcher_package": "com.android.launcher",
+    "rom_property": "ro.build.version.oplusrom",
+    "rom_prefix": "V16"
+  },
+  "measured_screen": [
+    1272,
+    2772
+  ],
+  "grid": {
+    "columns": 4,
+    "rows": 6,
+    "first_col_x": 0.1588,
+    "col_step": 0.2272,
+    "first_row_y": 0.1443,
+    "row_step": 0.1144,
+    "dock_y": 0.917,
+    "settings_key": "launcher_card_size_info",
+    "evidence": "#840 #1519 and a live dump on 2026-10-02 (columns x 202 491 780 1069, rows y 400 to 1986)"
+  },
+  "geometry": {
+    "dock_top": 0.848,
+    "page_edge_right_x": 0.997,
+    "page_edge_left_x": 0.003,
+    "safe_drop_x": 0.472,
+    "safe_drop_y": 0.488
+  },
+  "timing": {
+    "after_home": 0.9,
+    "after_tap": 1.4,
+    "after_drag": 1.4,
+    "after_swipe": 1.0,
+    "after_drawer_open": 1.5,
+    "after_text": 1.3,
+    "dialog_poll": [
+      6,
+      1.0
+    ]
+  },
+  "gestures": {
+    "home": {
+      "how": "keyevent",
+      "keys": [
+        "KEYCODE_HOME",
+        "KEYCODE_HOME"
+      ],
+      "gap": 0.25,
+      "note": "HOME always returns to the first page. Twice, because the first press can only close an app or folder.",
+      "evidence": "#1060 #2449"
+    },
+    "page_next": {
+      "how": "swipe",
+      "from": [
+        0.865,
+        0.577
+      ],
+      "to": [
+        0.157,
+        0.577
+      ],
+      "ms": 250,
+      "note": "250 ms changes page; 400 ms is read as a drag and does not. Swiping from near the bottom hits the search pill. Swiping right from the first page opens the Discover feed, not a page.",
+      "evidence": "#1040 #1060"
+    },
+    "drawer_open": {
+      "how": "swipe",
+      "from": [
+        0.5,
+        0.83
+      ],
+      "to": [
+        0.5,
+        0.325
+      ],
+      "ms": 300,
+      "note": "The search field at the bottom keeps the previous query; select all before typing.",
+      "evidence": "#900 #1311"
+    },
+    "long_press": {
+      "how": "motionevent_one_shell",
+      "hold": 1.4,
+      "note": "DOWN, sleep, UP in ONE adb shell. 'input swipe x y x y 1200' and separate adb calls do not open the menu.",
+      "evidence": "#1335 #1339 #905"
+    },
+    "swap": {
+      "how": "draganddrop",
+      "ms": 2000,
+      "note": "With Icon autofill OFF, dropping an icon onto another icon's cell swaps the two (no folder). This is what the ordering pass uses.",
+      "evidence": "#2264 #2276"
+    },
+    "drawer_to_home": {
+      "how": "draganddrop",
+      "ms": 1800,
+      "note": "A drop from the drawer always lands on the FIRST page's first free cell, whatever page is showing. Build on the first page, then move.",
+      "evidence": "#2203 #1969"
+    },
+    "drawer_onto_icon": {
+      "how": "draganddrop",
+      "ms": 1800,
+      "note": "Dropping a drawer result onto a home icon makes a folder; onto a folder adds to it.",
+      "evidence": "#1214 #1964"
+    },
+    "merge_into_folder": {
+      "how": "hover",
+      "steps": [
+        [
+          "down",
+          0.9
+        ],
+        [
+          "move_start",
+          0.2
+        ],
+        [
+          "move_mid",
+          0.3
+        ],
+        [
+          "move_target",
+          0.5
+        ],
+        [
+          "move_target",
+          0.8
+        ],
+        [
+          "up",
+          0
+        ]
+      ],
+      "fallback": {
+        "how": "draganddrop",
+        "ms": 600
+      },
+      "note": "A slow hover over the folder merges reliably (Connect, Fit first try). draganddrop at 1600 to 2200 ms usually SWAPS instead; 600 ms merged once. Always verify by opening the folder.",
+      "evidence": "#2860 #2822 #2843 #3114"
+    },
+    "page_flip_with_icon": {
+      "how": "edge_hold",
+      "down_hold": 0.8,
+      "lead_x": 0.708,
+      "hold_per_flip": 0.9,
+      "drop": [
+        0.472,
+        0.488
+      ],
+      "settle": 2.2,
+      "note": "Carry an icon to the screen edge and hold; each 0.9 s hold flips one page. A longer hold overshoots. draganddrop to the edge with 3000 ms made a new page at first, then failed six times for single icons.",
+      "evidence": "#2805 #2797 #2086 #2786"
+    },
+    "remove_icon": {
+      "how": "menu",
+      "menu_item": "Remove",
+      "confirm_button": "Remove",
+      "note": "Long-press, tap Remove, then a confirm dialog appears up to a second later; poll for it. Pressing HOME before confirming cancels it. Works inside an open folder too, which is the only way to take an app out of a folder.",
+      "evidence": "#1438 #1502 #1959"
+    },
+    "ungroup_folder": {
+      "how": "menu",
+      "menu_item": "Ungroup",
+      "confirm_button": "Ungroup",
+      "note": "Dissolves a folder into loose icons (they spill into free cells).",
+      "evidence": "#1438ff"
+    },
+    "rename_folder": {
+      "how": "edit_text",
+      "select_all": [
+        113,
+        29
+      ],
+      "commit": "KEYCODE_BACK",
+      "note": "Tap the folder, tap its name field, ctrl+a, input text, BACK. ENTER does not commit. Any keyevent before typing closes the folder and types into home search.",
+      "evidence": "#955 #965 #995"
+    }
+  },
+  "labels": {
+    "folder_prefix": "Folder:",
+    "home_settings": "Home screen settings",
+    "autofill": "Icon autofill",
+    "widgets_button": "Widgets",
+    "edit_done": "Done"
+  },
+  "hazards": [
+    "Dropping a folder onto another folder merges their contents. Moving a folder must end on an empty cell. (#2383 #2400)",
+    "New folders are auto-named from their apps' category, and two can get the same name. Identify a new folder by position (nearest to the seed icon), never by excluding known names. (#1892)",
+    "Icons cannot be dragged out of a folder by any gesture tried (draganddrop 1500 and 3000 ms, stepped motionevents, one-shell chains). Remove inside the folder instead. (#863 #1009 #1018 #1275 #1280)",
+    "A drop onto a cell a widget occupies is moved to the next free cell, so no merge happens. Count widget cells before placing. (#1519)",
+    "With Icon autofill ON the grid reflows the moment an icon is picked up, so merges and swaps become unpredictable. Build with it OFF. Turning it ON at the end packed page 1 correctly once and scrambled it another time, so verify after. (#3063 #2955)",
+    "A uiautomator dump run while a gesture is in flight breaks the gesture. Never dump from a second process during a build. (#2161)",
+    "Drawer search matches substrings and the first result wins: 'WHAT' finds WhatsApp before WHAT'S UP. Drawer names differ from store names ('Connect' for Garmin Connect, 'Fit' for Google Fit, 'My Odos'). (#1955 #2720ff)",
+    "Removing icons lets later icons flow forward, so positions read before a removal are stale. (#1717)",
+    "When the phone sleeps or the cable moves, every dump comes back empty and every check reads 'missing'. Treat an empty dump as no data, not as an empty screen. (#2054)"
+  ]
+}

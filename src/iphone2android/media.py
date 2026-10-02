@@ -9,12 +9,21 @@ iMessage attachments, photo edits (Mutations) and media kept inside apps.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import tempfile
 from pathlib import Path
 
 from .android.adb import Adb
 from .backup import Backup
+
+# Android's shared storage refuses these in file names, and adb push then fails for the whole folder
+# while still returning success for the files it did copy.
+BAD_CHARS = re.compile(r'[:*?"<>|\\]')
+
+
+def safe_name(name: str) -> str:
+    return BAD_CHARS.sub("_", name)
 
 MEDIA_EXT = {".jpg", ".jpeg", ".heic", ".heif", ".png", ".mov", ".mp4", ".dng", ".cr2", ".gif",
              ".m4v", ".webp", ".m4a", ".wav", ".aac", ".caf", ".pdf"}
@@ -47,7 +56,7 @@ def push_set(b: Backup, adb: Adb, domain: str, prefix: str, dest: str, batch: in
         try:
             used: set[str] = set()
             for r in rows[i:i + batch]:
-                name = os.path.basename(r["relativePath"])
+                name = safe_name(os.path.basename(r["relativePath"]))
                 if name in used:  # the same name from two folders
                     base, ext = os.path.splitext(name)
                     name = f"{base}_{r['fileID'][:6]}{ext}"

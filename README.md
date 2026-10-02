@@ -40,9 +40,14 @@ iphone2android convert --out android-import
 iphone2android media message-attachments photo-edits
 iphone2android appdata survey
 
+iphone2android accounts                       # what to sign in to again
+
+iphone2android launcher probe                 # which launcher, and which profile matches
 iphone2android layout extracted/IconState.plist --mapping mapping.json > layout.json
 iphone2android wallpaper extract
 iphone2android build layout.json --state build.json --autofill
+iphone2android check layout.json              # every page and folder against the layout
+iphone2android snapshot                       # the whole home screen as JSON
 iphone2android wallpaper set wallpaper/<image>
 ```
 
@@ -64,9 +69,18 @@ iphone2android wallpaper set wallpaper/<image>
 
 ## How the home screen is rebuilt
 
-Many launchers do not let `adb` change the layout (on ColorOS the launcher database and shortcut pinning are closed without root), so the builder moves icons through the screen the way a person does. It adds each app from the drawer search, reads the screen again after every drop, saves its progress so an interrupted build continues, puts each page in order one swap at a time, and turns on icon autofill at the end to close the gaps. Widgets are listed for placing through the launcher's widget picker. The builder is tested on ColorOS 16 (OPPO Find X9 Pro). Other launchers name their menus differently and may need changes in `android/launcher.py`.
+Many launchers do not let `adb` change the layout (on ColorOS the launcher database and shortcut pinning are closed without root), so the builder moves icons through the screen the way a person does. That only works with the right timings and gestures for each launcher, so they live in launcher profiles (`android/profiles/*.json`) as data, with the evidence for each. The ColorOS 16 profile was measured during a real migration on an OPPO Find X9 Pro. A few of the findings it holds:
 
-Wallpapers come from the backup as images (iOS 16 and later) or Apple's `.cpbitmap` format (older versions), converted to PNG. `wallpaper set` copies the image to the phone and opens its "Set as" screen.
+- A swipe changes page at 250 ms and is read as a drag at 400 ms.
+- A long press only opens the menu when the press, the wait and the release are sent in one adb shell.
+- A drop from the app drawer always lands on the first page, so everything is made there and carried to its page by holding at the screen edge, 0.9 seconds per page.
+- A slow hover merges an icon into a folder, while a 2 second drag onto an icon swaps them.
+- A folder dropped onto a folder merges the two, and new folders can get the same automatic name, so folders are found by position.
+- Icons cannot be dragged out of a folder, only removed inside it.
+
+The builder follows these, reads the screen again after every step, saves its progress, checks every folder by opening it, and orders each page one swap at a time. For a launcher without a profile, the skill has a calibration procedure, and `iphone2android launcher save-profile` stores the result. Profiles for other launchers are very welcome.
+
+Wallpapers come from the backup as images (iOS 16 and later) or Apple's `.cpbitmap` format (older versions), converted to PNG. `wallpaper set` copies the image to the phone and opens its "Set as" screen. Widgets are listed for placing through the launcher's widget picker.
 
 ## Development
 

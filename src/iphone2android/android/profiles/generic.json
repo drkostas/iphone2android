@@ -1,0 +1,158 @@
+{
+  "name": "generic",
+  "uncalibrated": true,
+  "description": "Starting values for a launcher with no profile yet, taken from the ColorOS 16 profile. They are guesses until calibrated: run the calibration steps in the skill and save the result as a new profile.",
+  "match": {},
+  "measured_screen": [
+    1080,
+    2400
+  ],
+  "grid": {
+    "columns": 4,
+    "rows": 6,
+    "first_col_x": 0.125,
+    "col_step": 0.25,
+    "first_row_y": 0.15,
+    "row_step": 0.115,
+    "dock_y": 0.917
+  },
+  "geometry": {
+    "dock_top": 0.848,
+    "page_edge_right_x": 0.997,
+    "page_edge_left_x": 0.003,
+    "safe_drop_x": 0.5,
+    "safe_drop_y": 0.488
+  },
+  "timing": {
+    "after_home": 1.2,
+    "after_tap": 1.8,
+    "after_drag": 2.0,
+    "after_swipe": 1.5,
+    "after_drawer_open": 2.0,
+    "after_text": 1.8,
+    "dialog_poll": [
+      8,
+      1.0
+    ]
+  },
+  "gestures": {
+    "home": {
+      "how": "keyevent",
+      "keys": [
+        "KEYCODE_HOME",
+        "KEYCODE_HOME"
+      ],
+      "gap": 0.4
+    },
+    "page_next": {
+      "how": "swipe",
+      "from": [
+        0.865,
+        0.577
+      ],
+      "to": [
+        0.157,
+        0.577
+      ],
+      "ms": 250
+    },
+    "drawer_open": {
+      "how": "swipe",
+      "from": [
+        0.5,
+        0.83
+      ],
+      "to": [
+        0.5,
+        0.325
+      ],
+      "ms": 300
+    },
+    "long_press": {
+      "how": "motionevent_one_shell",
+      "hold": 1.4
+    },
+    "swap": {
+      "how": "draganddrop",
+      "ms": 2000
+    },
+    "drawer_to_home": {
+      "how": "draganddrop",
+      "ms": 1800
+    },
+    "drawer_onto_icon": {
+      "how": "draganddrop",
+      "ms": 1800
+    },
+    "merge_into_folder": {
+      "how": "hover",
+      "steps": [
+        [
+          "down",
+          0.9
+        ],
+        [
+          "move_start",
+          0.2
+        ],
+        [
+          "move_mid",
+          0.3
+        ],
+        [
+          "move_target",
+          0.5
+        ],
+        [
+          "move_target",
+          0.8
+        ],
+        [
+          "up",
+          0
+        ]
+      ],
+      "fallback": {
+        "how": "draganddrop",
+        "ms": 600
+      }
+    },
+    "page_flip_with_icon": {
+      "how": "edge_hold",
+      "down_hold": 0.8,
+      "lead_x": 0.708,
+      "hold_per_flip": 0.9,
+      "drop": [
+        0.5,
+        0.488
+      ],
+      "settle": 2.2
+    },
+    "remove_icon": {
+      "how": "menu",
+      "menu_item": "Remove",
+      "confirm_button": "Remove"
+    },
+    "ungroup_folder": {
+      "how": "menu",
+      "menu_item": "Ungroup",
+      "confirm_button": "Ungroup"
+    },
+    "rename_folder": {
+      "how": "edit_text",
+      "select_all": [
+        113,
+        29
+      ],
+      "commit": "KEYCODE_BACK"
+    }
+  },
+  "labels": {
+    "folder_prefix": "Folder:",
+    "home_settings": "Home settings",
+    "autofill": "",
+    "widgets_button": "Widgets",
+    "edit_done": "Done"
+  },
+  "hazards": []
+}

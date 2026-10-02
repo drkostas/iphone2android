@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "iphone2android"
-version = "0.2.0"
+version = "0.3.0"
 description = "Move from an iPhone to an Android phone: messages, contacts, photos, apps and the home screen, from an encrypted iPhone backup"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -27,4 +27,4 @@ test = ["pytest>=8"]
 where = ["src"]
 
 [tool.setuptools.package-data]
-iphone2android = ["skill/SKILL.md"]
+iphone2android = ["skill/SKILL.md", "android/profiles/*.json"]

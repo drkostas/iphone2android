@@ -10,6 +10,25 @@ import shutil
 import subprocess
 
 
+def png_is_black(data: bytes) -> bool:
+    """True when a PNG holds only black pixels (what a locked or sleeping screen captures as)."""
+    import struct
+    import zlib
+
+    pos, idat = 8, b""
+    while pos + 8 <= len(data):
+        n = struct.unpack(">I", data[pos:pos + 4])[0]
+        if data[pos + 4:pos + 8] == b"IDAT":
+            idat += data[pos + 8:pos + 8 + n]
+        pos += 12 + n
+    try:
+        raw = zlib.decompress(idat)
+    except zlib.error:
+        return False
+    # Black rows are filter bytes (0 to 4), zero colour bytes and 255 alpha bytes, nothing else.
+    return bool(raw) and set(raw) <= {0, 1, 2, 3, 4, 255}
+
+
 class DeviceUnavailable(RuntimeError):
     """adb could not reach the phone. Raised instead of returning empty output, which would read as "nothing installed"."""
 

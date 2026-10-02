@@ -15,15 +15,17 @@ class Node:
     y: int
     cls: str
     clickable: bool
+    bounds: tuple = (0, 0, 0, 0)
+    package: str = ""
 
     @property
     def folder(self) -> bool:
         return self.label.startswith("Folder:")
 
 
-def _center(bounds: str) -> tuple[int, int]:
+def _bounds(bounds: str) -> tuple[int, int, int, int]:
     m = [int(v) for v in re.findall(r"-?\d+", bounds)]
-    return (m[0] + m[2]) // 2, (m[1] + m[3]) // 2
+    return m[0], m[1], m[2], m[3]
 
 
 def parse(xml: str) -> list[Node]:
@@ -37,14 +39,15 @@ def parse(xml: str) -> list[Node]:
         bounds = n.get("bounds", "")
         if not label or not bounds:
             continue
-        x, y = _center(bounds)
-        out.append(Node(label, x, y, n.get("class", "").split(".")[-1], n.get("clickable") == "true"))
+        b = _bounds(bounds)
+        out.append(Node(label, (b[0] + b[2]) // 2, (b[1] + b[3]) // 2, n.get("class", "").split(".")[-1],
+                        n.get("clickable") == "true", b, n.get("package", "")))
     return out
 
 
 def dump(adb: Adb) -> list[Node]:
-    adb.shell("uiautomator dump /sdcard/window.xml")
-    return parse(adb.shell("cat /sdcard/window.xml"))
+    # One shell for dump and read: about 2 s instead of 4 (#2449).
+    return parse(adb.shell("uiautomator dump /sdcard/window.xml >/dev/null 2>&1; cat /sdcard/window.xml"))
 
 
 def find_button(adb: Adb, labels: set[str]):

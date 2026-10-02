@@ -7,7 +7,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from . import __version__, apps, appdata, audit, backup, convert, layout, media, wallpaper
+from . import __version__, accounts, apps, appdata, audit, backup, convert, layout, media, wallpaper
 from .android import debloat, play, ui
 from .android.adb import Adb, DeviceUnavailable
 
@@ -129,6 +129,12 @@ def cmd_appdata(args) -> int:
     return 0
 
 
+def cmd_accounts(args) -> int:
+    res = accounts.read(Path(args.work) / "Accounts3.sqlite")
+    _emit(args, res, "\n".join(f"{'G ' if a['google'] else '  '}{a['username']:40s} {a['type'] or a['type_id'] or ''}" for a in res))
+    return 0
+
+
 # ---------------------------------------------------------------- apps
 
 def cmd_find_app(args) -> int:
@@ -189,8 +195,15 @@ def cmd_audit(args) -> int:
 
 
 def cmd_screenshot(args) -> int:
-    Path(args.out).write_bytes(Adb(args.serial).screenshot())
-    _emit(args, {"file": args.out}, args.out)
+    from .android.adb import png_is_black
+
+    data = Adb(args.serial).screenshot()
+    Path(args.out).write_bytes(data)
+    if png_is_black(data):
+        _emit(args, {"file": args.out, "black": True, "error": "the screen is off or locked; wake and unlock the phone"},
+              f"{args.out}: the picture is all black, so the screen is off or locked")
+        return 5
+    _emit(args, {"file": args.out, "black": False}, args.out)
     return 0
 
 
@@ -202,36 +215,134 @@ def cmd_screen(args) -> int:
 
 # ---------------------------------------------------------------- home screen
 
+USER_PROFILES = Path("~/.config/iphone2android/profiles").expanduser()
+
+
+def _launcher(args):
+    from .android.launcher import Launcher
+    from .android.profile import detect, load
+
+    adb = Adb(args.serial)
+    prof = load(args.profile) if getattr(args, "profile", None) else detect(adb, USER_PROFILES)
+    return Launcher(adb, prof)
+
+
 def _builder(args):
     from .android.build import Builder
-    from .android.launcher import Launcher
 
-    return Builder(Launcher(Adb(args.serial)), Path(args.state) if args.state else None,
+    return Builder(_launcher(args), Path(args.state) if getattr(args, "state", None) else None,
                    log=(lambda *_: None) if args.json else print)
 
 
 def cmd_build(args) -> int:
     lay = layout.load_json(Path(args.layout))
     b = _builder(args)
+    if b.l.p.get("uncalibrated"):
+        print("this launcher has no calibrated profile; calibrate it first (see the skill), or pass --profile", file=sys.stderr)
+        if not args.force:
+            return 4
+    if not b.l.launcher_in_front():
+        b.l.home()
     b.l.set_autofill(False)
     b.build(lay)
-    ok = b.order_all(lay)
-    if args.autofill:
+    ordered = b.order_all(lay)
+    diffs = b.check(lay)
+    if args.autofill and not diffs:
         b.l.set_autofill(True)
-    _emit(args, {"ordered": ok, "widgets_to_place": b.todo}, f"ordered: {ok}; widgets to place by hand: {len(b.todo)}")
-    return 0 if ok else 1
+        diffs = b.check(lay)  # autofill packed the grid correctly once and scrambled it once (#3063)
+    _emit(args, {"ordered": ordered, "differences": diffs, "problems": b.problems, "widgets_to_place": b.todo},
+          "\n".join([f"ordered: {ordered}", *[f"diff: {d}" for d in diffs], *[f"problem: {p}" for p in b.problems],
+                     *[f"widget to place: page {w['page']} {w['widget']} ({w['size']})" for w in b.todo]]))
+    return 0 if ordered and not diffs else 1
 
 
 def cmd_order(args) -> int:
-    ok = _builder(args).order_all(layout.load_json(Path(args.layout)))
-    _emit(args, {"ordered": ok}, f"ordered: {ok}")
+    b = _builder(args)
+    ok = b.order_all(layout.load_json(Path(args.layout)))
+    _emit(args, {"ordered": ok, "problems": b.problems}, f"ordered: {ok}")
     return 0 if ok else 1
 
 
-def cmd_autofill(args) -> int:
+def cmd_check(args) -> int:
+    diffs = _builder(args).check(layout.load_json(Path(args.layout)))
+    _emit(args, {"differences": diffs}, "\n".join(diffs) or "the home screen matches the layout")
+    return 0 if not diffs else 1
+
+
+def cmd_snapshot(args) -> int:
+    L = _launcher(args)
+    pages = L.pages()
+    out = {"dock": L.dock(), "pages": []}
+    for p, items in enumerate(pages):
+        page = []
+        for i in items:
+            entry = {"label": i.label, "kind": i.kind, "cell": list(i.cell)}
+            if i.kind == "folder":
+                entry["apps"] = L.open_folder(p, i.label)
+            if i.cells:
+                entry["cells"] = [list(c) for c in i.cells]
+            page.append(entry)
+        out["pages"].append(page)
+    L.home()
+    _emit(args, out)
+    return 0
+
+
+def cmd_launcher(args) -> int:
+    from .android.profile import available, detect, launcher_package
+
+    if args.action == "profiles":
+        names = list(available()) + sorted(p.stem for p in USER_PROFILES.glob("*.json"))
+        _emit(args, names, "\n".join(names))
+        return 0
+    if args.action == "drawer":
+        L = _launcher(args)
+        L.drawer_find(args.file or "")
+        dock_top = L.h * L.p["geometry"]["dock_top"]
+        names = [n.label for n in L.own(L.dump()) if n.cls == "TextView" and n.clickable and n.y < dock_top]
+        L.home()
+        _emit(args, names, "\n".join(names) or "no results")
+        return 0
+    if args.action == "save-profile":
+        src = json.loads(Path(args.file).read_text())
+        for key in ("name", "match", "grid", "geometry", "timing", "gestures", "labels"):
+            if key not in src:
+                sys.exit(f"profile is missing {key!r}")
+        USER_PROFILES.mkdir(parents=True, exist_ok=True)
+        dest = USER_PROFILES / f"{src['name']}.json"
+        dest.write_text(json.dumps(src, indent=2, ensure_ascii=False))
+        _emit(args, {"saved": str(dest)}, f"saved {dest}")
+        return 0
+    # probe: read-only facts for calibration
+    adb = Adb(args.serial)
     from .android.launcher import Launcher
 
-    _emit(args, {"autofill": Launcher(Adb(args.serial)).set_autofill(args.state == "on")}, None)
+    prof = detect(adb, USER_PROFILES)
+    L = Launcher(adb, prof)
+    nodes = L.dump(allow_empty=True)
+    own = L.own(nodes)
+    xs = sorted({n.x for n in own if n.clickable and n.y < L.h * prof["geometry"]["dock_top"]})
+    ys = sorted({n.y for n in own if n.clickable and n.label.startswith(prof["labels"]["folder_prefix"])} or
+                {n.y for n in own if n.clickable and n.y < L.h * prof["geometry"]["dock_top"]})
+    facts = {
+        "launcher_package": launcher_package(adb),
+        "profile": prof["name"], "uncalibrated": bool(prof.get("uncalibrated")),
+        "screen": [L.w, L.h],
+        "density": adb.shell("wm density").strip().splitlines(),
+        "android": adb.shell("getprop ro.build.version.release").strip(),
+        "rom": {k: adb.shell(f"getprop {k}").strip() for k in ("ro.build.version.oplusrom", "ro.build.display.id", "ro.miui.ui.version.name", "ro.build.version.oneui")},
+        "grid_setting": adb.shell("settings get secure launcher_card_size_info").strip()[:300],
+        "launcher_in_front": L.launcher_in_front(),
+        "overlay": L.overlay(),
+        "icon_x": xs, "icon_y": ys,
+        "items": [{"label": i.label, "kind": i.kind, "cell": list(i.cell), "x": i.x, "y": i.y} for i in L.items(nodes)],
+    }
+    _emit(args, facts)
+    return 0
+
+
+def cmd_autofill(args) -> int:
+    _emit(args, {"autofill": _launcher(args).set_autofill(args.state == "on")}, None)
     return 0
 
 
@@ -289,6 +400,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--push", action="store_true", help="with extract: also copy to the phone")
     s.set_defaults(fn=cmd_appdata)
 
+    sub.add_parser("accounts", help="the accounts the iPhone was signed in to (after extract)").set_defaults(fn=cmd_accounts)
+
     s = sub.add_parser("find-app", help="search the Play Store for an app by name")
     s.add_argument("name")
     s.add_argument("--country", default="us")
@@ -326,13 +439,25 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("screen", help="list what is on the phone's screen").set_defaults(fn=cmd_screen)
 
     for name, fn, text in (("build", cmd_build, "build the home screen from a layout file"),
-                           ("order", cmd_order, "put each page of the home screen in the layout's order")):
+                           ("order", cmd_order, "put each page of the home screen in the layout's order"),
+                           ("check", cmd_check, "compare the home screen and its folders with a layout file")):
         s = sub.add_parser(name, help=text)
         s.add_argument("layout")
         s.add_argument("--state", help="progress file, so an interrupted build continues")
+        s.add_argument("--profile", help="launcher profile name or JSON file (default: detected)")
         if name == "build":
             s.add_argument("--autofill", action="store_true", help="turn Icon autofill on at the end to pack the grid")
+            s.add_argument("--force", action="store_true", help="build even with an uncalibrated profile")
         s.set_defaults(fn=fn)
+
+    s = sub.add_parser("snapshot", help="read every home screen page and folder into JSON")
+    s.add_argument("--profile")
+    s.set_defaults(fn=cmd_snapshot)
+
+    s = sub.add_parser("launcher", help="launcher profiles: probe this phone, list profiles, save a calibrated one")
+    s.add_argument("action", choices=["probe", "profiles", "save-profile", "drawer"])
+    s.add_argument("file", nargs="?", help="with save-profile: the profile JSON; with drawer: the search term")
+    s.set_defaults(fn=cmd_launcher)
 
     s = sub.add_parser("autofill", help="turn the launcher's Icon autofill on or off")
     s.add_argument("state", choices=["on", "off"])

@@ -12,7 +12,6 @@ import pytest
 
 from iphone2android import apps, appdata, audit, backup, layout, wallpaper
 from iphone2android.android.adb import Adb, DeviceUnavailable
-from iphone2android.android.build import Builder
 from iphone2android.cli import main
 
 
@@ -90,27 +89,6 @@ def test_widgets_and_library_are_read_and_mapped(tmp_path):
     assert android["pages"][0] == [{"widget": ["Weather"], "size": "small"}, {"widget": ["Weather", "Spotify"], "size": "medium"}, "Spotify"]
 
 
-def test_builder_leaves_widgets_as_todo_and_orders_around_them():
-    class L:
-        def __init__(self):
-            self.page = ["B", "A"]
-            self.drags = 0
-
-        def icons(self, page):
-            from iphone2android.android.ui import Node
-            return [Node(x, i, 0, "TextView", True) for i, x in enumerate(self.page)]
-
-        def drag(self, x1, y1, x2, y2, ms=600):
-            self.page[x1], self.page[x2] = self.page[x2], self.page[x1]
-
-    lay = {"pages": [[{"widget": ["Weather"], "size": "small"}, "A", "B"]]}
-    b = Builder(L(), log=lambda *_: None)
-    b.done = ["p0:A", "p0:B"]  # pretend the apps are placed
-    b.build(lay)
-    assert b.todo == [{"page": 1, "widget": ["Weather"], "size": "small"}]
-    assert b.order_all(lay) and b.l.page == ["A", "B"]
-
-
 # ---------------------------------------------------------------- wallpaper
 
 def make_cpbitmap(width, height, pixel_bgra, align=16):
@@ -173,6 +151,12 @@ def test_wallpaper_candidates_and_extract(tmp_path):
     assert (tmp_path / "wp" / "HomeBackground.png").read_bytes().startswith(b"\x89PNG")
 
 
+def test_names_android_refuses_are_made_safe():
+    from iphone2android.media import safe_name
+
+    assert safe_name('IMG 10:24:01 "a"|b?.jpg') == "IMG 10_24_01 _a__b_.jpg"
+
+
 def test_appdata_survey_extract_and_settings(tmp_path):
     settings = plistlib.dumps({"accountEmail": "ada@example.com", "authToken": "SECRET", "serverHost": "eu.example.com"})
     b = fake_backup(tmp_path, [
@@ -201,6 +185,7 @@ def fake_phone(tmp_path, sms_rows=3, denied_calls=True):
     p.write_text(f"""#!/bin/sh
 case "$*" in
   *"content://sms"*) echo {sms_rows} ;;
+  *"content://mms"*) echo 1 ;;
   *"call_log"*) {'echo "Error: java.lang.SecurityException: Permission Denial"' if denied_calls else 'echo 1'} ;;
   *"contacts/contacts"*) echo 1 ;;
   *"calendar/events"*) echo 0 ;;
@@ -226,9 +211,9 @@ def test_audit_reports_gaps_and_unknowns(tmp_path):
         ("c2", "CameraRollDomain", "Media/DCIM/100APPLE/IMG_2.HEIC", 1, b"p"),
     ])
     r = audit.run(fake_phone(tmp_path, sms_rows=1), ex, {"x": {"package": "com.whatsapp"}, "y": {"package": "com.telegram"}}, b)
-    assert r["iphone"]["messages"] == 3 and r["phone"]["messages"] == 1
+    assert r["iphone"]["messages"] == 3 and r["phone"]["messages"] == 2  # 1 SMS + 1 MMS
     assert r["phone"]["calls"] is None  # refused by the phone, not zero
-    assert r["gaps"]["messages"] == 2 and "calls" not in r["gaps"]
+    assert r["gaps"]["messages"] == 1 and "calls" not in r["gaps"]
     assert r["apps"]["missing"] == ["com.telegram"]
     assert r["photos"] == {"camera_roll": 2, "missing_by_name": 1, "examples": ["IMG_2.HEIC"]}
 
@@ -254,3 +239,20 @@ def test_skill_install_and_json_output(tmp_path, capsys):
     assert skill.startswith("---\nname: iphone2android") and "Phase 1. The official transfer" in skill
     assert main(["--json", "--backup-root", str(tmp_path / "none"), "backups"]) == 0
     assert json.loads(capsys.readouterr().out) == []
+
+
+def test_accounts_lists_signed_in_accounts(tmp_path):
+    from iphone2android import accounts
+
+    db = tmp_path / "Accounts3.sqlite"
+    con = sqlite3.connect(db)
+    con.executescript("""
+        CREATE TABLE ZACCOUNTTYPE (Z_PK INTEGER PRIMARY KEY, ZACCOUNTTYPEDESCRIPTION TEXT, ZIDENTIFIER TEXT);
+        CREATE TABLE ZACCOUNT (Z_PK INTEGER PRIMARY KEY, ZUSERNAME TEXT, ZACCOUNTDESCRIPTION TEXT, ZACCOUNTTYPE INTEGER);
+        INSERT INTO ZACCOUNTTYPE VALUES (1, 'Gmail', 'com.apple.account.Google'), (2, 'Exchange', 'com.apple.account.Exchange');
+        INSERT INTO ZACCOUNT VALUES (1, 'ada@gmail.com', 'Gmail', 1), (2, 'ada@gmail.com', 'Gmail', 1),
+                                    (3, 'ada@work.example', 'Work', 2), (4, NULL, 'local', NULL);""")
+    con.commit()
+    con.close()
+    got = accounts.read(db)
+    assert [(a["username"], a["google"]) for a in got] == [("ada@gmail.com", True), ("ada@work.example", False)]

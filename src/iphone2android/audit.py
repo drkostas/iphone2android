@@ -47,10 +47,20 @@ def _provider_count(adb: Adb, uri: str) -> int | None:
         return None
 
 
+CALL_LOG_CAP = 6000  # Android keeps at most this many calls; a count of exactly 6000 is a cap, not a total
+
+
 def phone_counts(adb: Adb) -> dict:
+    sms = _provider_count(adb, "content://sms")
+    mms = _provider_count(adb, "content://mms")
+    calls = _provider_count(adb, "content://call_log/calls")
     return {
-        "messages": _provider_count(adb, "content://sms"),
-        "calls": _provider_count(adb, "content://call_log/calls"),
+        # iMessages are restored as MMS, so the iPhone's message count compares with SMS plus MMS.
+        "messages": (sms or 0) + (mms or 0) if sms is not None else None,
+        "sms": sms,
+        "mms": mms,
+        "calls": calls,
+        "calls_capped": calls == CALL_LOG_CAP,
         "contacts": _provider_count(adb, "content://com.android.contacts/contacts"),
         "calendar_events": _provider_count(adb, "content://com.android.calendar/events"),
     }
@@ -85,7 +95,9 @@ def run(adb: Adb, extracted: Path, mapping: dict | None = None, backup=None) -> 
             report["photos"] = {"camera_roll": len(want), "missing_by_name": len(missing), "examples": missing[:20]}
     except DeviceUnavailable as e:
         report["phone"] = {"error": str(e)}
-    report["gaps"] = {k: (report["iphone"][k] or 0) - (report["phone"].get(k) or 0)
+    phone = report.get("phone") if isinstance(report.get("phone"), dict) else {}
+    report["gaps"] = {k: (report["iphone"][k] or 0) - (phone.get(k) or 0)
                       for k in report["iphone"]
-                      if isinstance(report.get("phone"), dict) and report["phone"].get(k) is not None and report["iphone"][k] is not None}
+                      if phone.get(k) is not None and report["iphone"][k] is not None
+                      and not (k == "calls" and phone.get("calls_capped"))}
     return report

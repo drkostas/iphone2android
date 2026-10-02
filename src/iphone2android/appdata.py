@@ -65,7 +65,9 @@ def extract(backup, bundle: str, out: Path) -> dict:
     base = out / bundle
     copied, failed = 0, 0
     for r in backup.rows("flags=1 AND (domain=? OR domain=?)", _domains(bundle)):
-        rel = r["relativePath"] or "root"
+        from .media import safe_name
+
+        rel = "/".join(safe_name(part) for part in (r["relativePath"] or "root").split("/"))
         folder = base / Path(rel).parent
         try:
             backup.copy_entry(r, folder, Path(rel).name or "root")
