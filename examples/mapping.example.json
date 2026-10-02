@@ -1,0 +1,11 @@
+{
+  "com.apple.camera": {"label": "Camera"},
+  "com.apple.mobileslideshow": {"label": "Photos"},
+  "com.apple.mobilephone": {"package": "com.google.android.dialer", "label": "Phone"},
+  "com.apple.MobileSMS": {"package": "com.google.android.apps.messaging", "label": "Messages"},
+  "com.google.chrome.ios": {"package": "com.android.chrome", "label": "Chrome"},
+  "net.whatsapp.WhatsApp": {"package": "com.whatsapp", "label": "WhatsApp"},
+  "ph.telegra.Telegraph": {"package": "org.telegram.messenger", "label": "Telegram"},
+  "com.spotify.client": {"package": "com.spotify.music", "label": "Spotify"},
+  "com.google.Maps": {"package": "com.google.android.apps.maps", "label": "Maps"}
+}

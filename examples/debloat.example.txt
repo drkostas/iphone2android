@@ -1,0 +1,5 @@
+# One package per line. Removed for the current user only, and can be restored with
+#   adb shell cmd package install-existing <package>
+com.facebook.katana
+com.facebook.system
+com.facebook.appmanager

@@ -1,0 +1,7 @@
+{
+  "pages": [
+    ["Camera", "Photos", "Maps", {"folder": "Social", "apps": ["WhatsApp", "Telegram"]}],
+    ["Spotify"]
+  ],
+  "dock": ["Phone", "Messages", "Chrome"]
+}
