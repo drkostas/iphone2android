@@ -1,98 +1,72 @@
 # iphone2android
 
-iphone2android moves your data from an iPhone to an Android phone using an encrypted iPhone backup on your computer and `adb` to the new phone. It converts messages, call history, contacts, calendars and bookmarks into formats Android and Google import, copies photos and the media Google Photos does not keep, installs your apps, and rebuilds your iPhone home screen on the Android launcher.
+iphone2android is a toolkit for moving from an iPhone to an Android phone without leaving anything behind. It is built for Claude Code to run the move, and every command also works by hand.
 
-## Before you wipe the iPhone
+The official transfer (the setup wizard's "Copy apps and data", Samsung Smart Switch, OPPO Clone Phone) moves a lot, but it misses apps without an obvious match, app data, iMessage attachments, photo edits, widgets and the home screen itself. iphone2android starts from there. It reads an encrypted iPhone backup on your computer, finds what the official transfer missed, and fills the gaps on the phone over `adb`, checking each step.
 
-Some things cannot be recovered from any backup, so move them while the iPhone still works.
+What it covers:
 
-- Authenticator apps. Export the accounts from the iPhone app (Google Authenticator has Transfer accounts) and scan them on Android.
-- Passwords in the iCloud Keychain. A backup cannot decrypt them, because every item is also sealed with a key that never leaves the iPhone. Use a password manager or a Mac signed in to the same Apple ID to export them.
-- Tickets and passes bound to the device (transit tickets, ski passes). Move them through the provider's account.
-- Footage that exists only on the phone in apps such as action-camera apps.
+- Finding the Android version of every iPhone app (Apple's app lookup, then the Play Store search) and installing the free ones
+- Messages, call history, contacts, calendars and Safari bookmarks, converted for Android and Google
+- Photos, iMessage attachments and photo edits, copied to the phone
+- The data iPhone apps keep locally, found, copied, and the account names in their settings
+- The home screen with its folders, order and widgets, and the iPhone wallpaper
+- An audit of what the iPhone had against what the phone has, before and after
 
-## Install
+## With Claude Code
 
 ```bash
 pip install iphone2android
+iphone2android skill          # installs the skill into ~/.claude/skills/iphone2android
 ```
 
-You also need `adb` (`brew install android-platform-tools` on macOS) with USB debugging on in the phone's developer options.
+Then ask Claude to move you from your iPhone. The skill walks the whole move in order, starting with what has to happen before the iPhone is wiped, and Claude runs each command with `--json`, reads the result, and checks the phone with screenshots. You only do what needs your hands or your consent (the backup password, accepting terms, choosing a default SMS app).
 
-## 1. Make an encrypted backup
+## By hand
 
-In Finder (or iTunes on Windows) select the iPhone, choose "Back up all of the data on your iPhone to this Mac", tick "Encrypt local backup" and back up. Only an encrypted backup contains messages, call history and app data.
+You need `adb` (`brew install android-platform-tools` on macOS) with USB debugging on in the phone's developer options, and an encrypted backup (Finder, select the iPhone, tick "Encrypt local backup", Back Up Now).
 
 ```bash
-iphone2android backups          # list the backups on this computer
-iphone2android apps             # the apps that were installed (no password needed)
-```
+iphone2android backups                        # the backups on this computer
+iphone2android extract --inventory            # asks for the backup password
+iphone2android audit --photos                 # what the official transfer missed
 
-On Windows, pass `--backup-root "%APPDATA%\Apple Computer\MobileSync\Backup"`.
-
-## 2. Extract and convert
-
-```bash
-iphone2android extract --inventory      # asks for the backup password (or set IPHONE_BACKUP_PASSWORD)
-iphone2android convert --out android-import
-```
-
-| File | Import it with |
-|---|---|
-| `sms_backup.xml`, `calls_backup.xml` | the SMS Backup & Restore app on the phone (Restore, then choose the file) |
-| `contacts.vcf` | Google Contacts (Import) |
-| `calendar.ics` | Google Calendar (Settings, Import & export) |
-| `safari_bookmarks.html` | Chrome on a computer (Bookmarks, Import), then sync |
-
-Apple sometimes saves the message database in the middle of a write, so the backup copy is shorter than its own header says and SQLite refuses to open it. `convert` corrects the header in a copy and reads what is there. If that is not enough and your `sqlite3` has the `.recover` command, it uses that instead.
-
-WhatsApp chats (`ChatStorage.sqlite`) need a dedicated iOS to Android WhatsApp migrator, and Apple Notes (`NoteStore.sqlite`) need an Apple Notes parser. `extract` copies both out for those tools.
-
-## 3. Photos and media
-
-```bash
-iphone2android media camera-roll message-attachments photo-edits
-```
-
-Files are decrypted in batches, pushed to the phone and deleted, so the computer does not need room for the whole camera roll. If your photos are already in Google Photos, skip `camera-roll`. The other two are never in Google Photos (iMessage attachments, and the edited versions of photos).
-
-## 4. Apps
-
-Write a mapping from iPhone bundle ids to Android packages, using `iphone2android apps` for the list. `label` is the app's name in the Android app drawer.
-
-```json
-{"net.whatsapp.WhatsApp": {"package": "com.whatsapp", "label": "WhatsApp"}}
-```
-
-Check every package before installing. Guessed package names are often wrong, because the Android package of a bank or a local app rarely matches its iOS bundle id.
-
-```bash
+iphone2android suggest                        # mapping.json, and mapping.draft.json for apps to review
+iphone2android find-app "App name"            # search the Play Store by hand
 iphone2android verify mapping.json
 iphone2android install --mapping mapping.json
-```
 
-`install` opens each app's page in the Play Store app and presses Install, so it works for free apps only. Each app is checked as installed before the next one starts.
+iphone2android convert --out android-import
+iphone2android media message-attachments photo-edits
+iphone2android appdata survey
 
-To remove preinstalled apps you do not want, list them in a file and run `iphone2android debloat list.txt --keep-mapping mapping.json --dry-run`, then again without `--dry-run`. Apps are removed for the current user only, and `adb shell cmd package install-existing <package>` brings one back.
-
-## 5. Home screen
-
-```bash
-iphone2android extract                                   # also copies IconState.plist
 iphone2android layout extracted/IconState.plist --mapping mapping.json > layout.json
+iphone2android wallpaper extract
 iphone2android build layout.json --state build.json --autofill
+iphone2android wallpaper set wallpaper/<image>
 ```
 
-`layout.json` lists pages of apps and folders by their drawer name, which you can edit before building. The builder adds each app from the app drawer search, reads the screen again after every drop, and saves its progress so an interrupted build continues where it stopped. Then it puts each page in order one swap at a time, and finally turns the launcher's icon autofill on to close the gaps. Do not touch the phone while it runs.
+| File from `convert` | Import it with |
+|---|---|
+| `sms_backup.xml`, `calls_backup.xml` | the SMS Backup & Restore app |
+| `contacts.vcf` | Google Contacts (Import) |
+| `calendar.ics` | Google Calendar on the web (Settings, Import & export) |
+| `safari_bookmarks.html` | Chrome on a computer (Bookmarks, Import) |
 
-Many launchers do not let adb change the layout directly (on ColorOS the launcher database and shortcut pinning are closed without root), so the builder moves icons through the screen the way a person does. It is tested on ColorOS 16 (OPPO Find X9 Pro). Other launchers name their menus differently and may need changes in `android/launcher.py`.
+`iphone2android screenshot` and `iphone2android screen` show what is on the phone, and `iphone2android debloat` removes preinstalled apps you do not want (reversibly).
 
-## Limits
+## What cannot move
 
-- Only an encrypted backup has messages and app data.
-- Keychain passwords cannot be extracted (see above).
-- Paid apps are not installed.
-- The home screen builder is tested on one launcher.
+- Passwords in the iCloud Keychain. Every item is sealed with a key that never leaves the iPhone, so no backup can open them. Export them with a password manager first.
+- Authenticator codes. Transfer them from the authenticator app while the iPhone still works.
+- Most app data. Android apps cannot read their iPhone version's files, so app data is copied out for an app's own import, a dedicated migrator (WhatsApp chats need one) or safekeeping. Apps that keep their data in an account only need signing in.
+- Paid apps are not installed automatically.
+
+## How the home screen is rebuilt
+
+Many launchers do not let `adb` change the layout (on ColorOS the launcher database and shortcut pinning are closed without root), so the builder moves icons through the screen the way a person does. It adds each app from the drawer search, reads the screen again after every drop, saves its progress so an interrupted build continues, puts each page in order one swap at a time, and turns on icon autofill at the end to close the gaps. Widgets are listed for placing through the launcher's widget picker. The builder is tested on ColorOS 16 (OPPO Find X9 Pro). Other launchers name their menus differently and may need changes in `android/launcher.py`.
+
+Wallpapers come from the backup as images (iOS 16 and later) or Apple's `.cpbitmap` format (older versions), converted to PNG. `wallpaper set` copies the image to the phone and opens its "Set as" screen.
 
 ## Development
 
@@ -101,8 +75,8 @@ python -m venv .venv && .venv/bin/pip install -e '.[test]'
 .venv/bin/pytest
 ```
 
-The tests use synthetic databases, a fake decryptor, a fake `adb` and a simulated home screen, so they need no iPhone and no Android phone.
+The tests use synthetic databases, a fake decryptor, fake web pages for the app stores, a fake `adb` and a simulated home screen, so they need no iPhone and no Android phone.
 
 ## License
 
-MIT. Backup decryption uses [iOSbackup](https://github.com/avibrazil/iOSbackup) (LGPL).
+MIT. Backup decryption uses [iOSbackup](https://github.com/avibrazil/iOSbackup) (LGPL). The cpbitmap layout follows [cpbitmap-to-png](https://github.com/hthetiot/cpbitmap-to-png) (MIT).

@@ -32,6 +32,11 @@ KNOWN = [
     ("HomeDomain", "Library/SpringBoard/IconState.plist", "IconState.plist", "Home screen layout", "iphone2android layout"),
 ]
 
+# Files that have lived in more than one place across iOS versions: (domain, other path, name).
+ALTERNATES = {
+    "IconState.plist": [("HomeDomain", "Library/Preferences/IconState.plist")],
+}
+
 
 def backups(root: Path = DEFAULT_ROOT) -> list[dict]:
     """Every backup under root, with what its Info.plist says (no password needed)."""
@@ -135,9 +140,13 @@ def extract_known(b: Backup, out: Path) -> list[tuple[str, str, Path | None]]:
     """Copy every known database out. Returns (label, destination format, path or None)."""
     got = []
     for domain, rel, name, label, dest in KNOWN:
-        try:
-            p = b.copy(domain, rel, out, name)
-        except Exception:  # noqa: BLE001 - a file that fails to decrypt is reported as missing
-            p = None
+        p = None
+        for d, r in [(domain, rel)] + ALTERNATES.get(name, []):
+            try:
+                p = b.copy(d, r, out, name)
+            except Exception:  # noqa: BLE001 - a file that fails to decrypt is reported as missing
+                p = None
+            if p:
+                break
         got.append((label, dest, p))
     return got

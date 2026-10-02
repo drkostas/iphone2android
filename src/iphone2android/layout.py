@@ -6,7 +6,8 @@ app drawer search, so the Android layout lists the name to search for. A mapping
     {"com.spotify.client": {"package": "com.spotify.music", "label": "Spotify"}}
 
 `label` is what to type in the drawer search and how the icon is named on the home screen. Apps
-with no Android equivalent are left out of the target layout and listed separately.
+with no Android equivalent are left out of the target layout and listed separately. Widgets keep
+their size (small, medium, large, extraLarge) and the apps they belong to.
 """
 from __future__ import annotations
 
@@ -23,8 +24,17 @@ def _bundle(item) -> str | None:
     return None
 
 
+def _widget(item: dict) -> dict:
+    """A widget or a Smart Stack: its size and the apps whose widgets it shows."""
+    elements = item.get("elements") or [item]
+    apps = [e.get("containerBundleIdentifier") for e in elements if isinstance(e, dict) and e.get("containerBundleIdentifier")]
+    return {"widget": apps, "size": item.get("gridSize", "small")}
+
+
 def _entry(item):
-    """A loose app (its bundle id) or a folder {"folder": name, "apps": [...]}; None for widgets."""
+    """A loose app (its bundle id), a folder {"folder", "apps"} or a widget {"widget", "size"}."""
+    if isinstance(item, dict) and ("gridSize" in item or item.get("elementType") == "widget"):
+        return _widget(item)
     if isinstance(item, dict) and "displayName" in item:
         apps = [b for page in item.get("iconLists", []) for x in page if (b := _bundle(x))]
         return {"folder": item["displayName"], "apps": apps}
@@ -37,6 +47,8 @@ def read_iconstate(path: Path) -> dict:
     return {
         "dock": [e for x in d.get("buttonBar", []) if (e := _entry(x))],
         "pages": [[e for x in page if (e := _entry(x))] for page in d.get("iconLists", [])],
+        # installed, but kept in the App Library instead of on a page
+        "library": [b for x in d.get("ignored", []) or [] if (b := _bundle(x))],
     }
 
 
@@ -52,6 +64,9 @@ def to_android(ios_layout: dict, mapping: dict) -> tuple[dict, list[str]]:
         return m["label"]
 
     def entry(e):
+        if isinstance(e, dict) and "widget" in e:
+            apps = [a for b in e["widget"] if (a := label(b))]
+            return {"widget": apps, "size": e.get("size", "small")} if apps else None
         if isinstance(e, dict):
             apps = [a for b in e["apps"] if (a := label(b))]
             return {"folder": e["folder"], "apps": apps} if apps else None

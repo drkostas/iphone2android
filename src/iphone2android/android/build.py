@@ -18,7 +18,13 @@ from pathlib import Path
 
 
 def _label(entry) -> str:
+    if isinstance(entry, dict) and "widget" in entry:
+        return f"Widget:{'/'.join(entry['widget'])}"
     return f"Folder:{entry['folder']}" if isinstance(entry, dict) else entry
+
+
+def _is_widget(entry) -> bool:
+    return isinstance(entry, dict) and "widget" in entry
 
 
 class Builder:
@@ -27,6 +33,7 @@ class Builder:
         self.state_file = state_file
         self.log = log
         self.done: list[str] = []
+        self.todo: list[dict] = []
         if state_file and state_file.exists():
             self.done = json.loads(state_file.read_text()).get("done", [])
 
@@ -50,6 +57,12 @@ class Builder:
         for e in entries:
             key = f"p{page}:{_label(e)}"
             if key in self.done:
+                continue
+            if _is_widget(e):
+                # Widget pickers differ between launchers, so a widget is placed through the screen
+                # (see the skill), and the builder records it as still to do.
+                self.todo.append({"page": page + 1, "widget": e["widget"], "size": e.get("size")})
+                self.log(f"  widget {'/'.join(e['widget'])} ({e.get('size')}): to place by hand")
                 continue
             if isinstance(e, str):
                 r = self.add(e, page)
@@ -112,5 +125,5 @@ class Builder:
     def order_all(self, layout: dict) -> bool:
         ok = True
         for page, entries in enumerate(layout.get("pages", [])):
-            ok = self.order(page, [_label(e) for e in entries]) and ok
+            ok = self.order(page, [_label(e) for e in entries if not _is_widget(e)]) and ok
         return ok

@@ -23,6 +23,14 @@ class Adb:
         cmd = [self.binary] + (["-s", self.serial] if self.serial else []) + list(args)
         return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
 
+    def screenshot(self, timeout: float = 30) -> bytes:
+        """The screen as PNG bytes (binary output, so not through run's text decoding)."""
+        cmd = [self.binary] + (["-s", self.serial] if self.serial else []) + ["exec-out", "screencap", "-p"]
+        r = subprocess.run(cmd, capture_output=True, timeout=timeout, stdin=subprocess.DEVNULL)
+        if r.returncode != 0 or not r.stdout.startswith(b"\x89PNG"):
+            raise DeviceUnavailable((r.stderr or b"").decode("utf-8", "replace").strip()[:200] or "no screenshot returned")
+        return r.stdout
+
     def shell(self, cmd: str, timeout: float = 90) -> str:
         try:
             r = self.run("shell", cmd, timeout=timeout)
