@@ -1,3 +1,5 @@
+![iphone2android](docs/images/banner.png)
+
 # iphone2android
 
 iphone2android is a toolkit for moving from an iPhone to an Android phone without leaving anything behind. It is built for Claude Code to run the move, and every command also works by hand.
